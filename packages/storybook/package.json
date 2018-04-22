@@ -12,6 +12,8 @@
     "@storybook/addon-actions": "^3.4.1",
     "@storybook/react": "^3.4.1",
     "babel-core": "^6.26.0",
+    "babel-plugin-transform-class-properties": "^6.24.1",
+    "babel-plugin-transform-object-rest-spread": "^6.26.0",
     "babel-polyfill": "^6.26.0"
   },
   "dependencies": {
