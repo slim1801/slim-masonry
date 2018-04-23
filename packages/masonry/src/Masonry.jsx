@@ -53,13 +53,24 @@ export default class Masonry extends Component {
 
   onScroll(event) {
     const element = event.currentTarget || event.target;
-    this.scrollTop = element.scrollTop;
-    if (
-      this.scrollTop + this.height >
-      this.minBottom - this.props.virtualTrigger
-    ) {
-      this.forceUpdate();
-      console.log("SCROLL: ", this.minBottom - this.props.virtualTrigger);
+    if (element.scrollTop > this.scrollTop) {
+      this.scrollTop = element.scrollTop;
+      if (
+        this.scrollTop + this.height >
+        this.minBottom - this.props.virtualTrigger
+      ) {
+        this.forceUpdate();
+        console.log(
+          "SCROLL DOWN: ",
+          this.minBottom - this.props.virtualTrigger
+        );
+      }
+    } else if (element.scrollTop < this.scrollTop) {
+      this.scrollTop = element.scrollTop;
+      if (this.minTop + this.props.virtualTrigger < this.scrollTop) {
+        this.forceUpdate();
+        console.log("SCROLL UP: ", this.minBottom - this.props.virtualTrigger);
+      }
     }
   }
 
@@ -97,73 +108,45 @@ export default class Masonry extends Component {
     const columns = Math.floor(offsetWidth / columnWidth);
     const verticalMargins = (offsetWidth % columnWidth) * 0.5;
 
-    let nextTop = 0;
-    let nextLeft = verticalMargins / 2;
+    this.positionArray = map(new Array(columns).fill(0), (value, index) => ({
+      left: index * columnWidth + verticalMargins,
+      top: 0
+    }));
+
     const renderedBricks = [];
 
     for (let index = 0; index < bricks.length; index++) {
+      const brick = bricks[index];
+      const { top, left } = this.positionArray[0];
       const height = getBrickHeight(index);
       const style = {
-        top: nextTop,
-        left: nextLeft,
+        top,
+        left,
         height,
         width: columnWidth,
         position: "absolute"
       };
 
+      this.addToPositionArray({ top: height + top, left }, this.positionArray);
+      this.positionArray.shift();
+
+      if (height + top <= this.scrollTop - virtualBuffer) {
+        continue;
+      } else if (renderedBricks.length === 0) {
+        this.minTop = top;
+      }
+
+      if (every(this.positionArray, pos => pos.top > this.getVirtualBottom())) {
+        this.minBottom = this.positionArray[0].top;
+        return renderedBricks;
+      }
       const props = { style, index, item: brick };
+      if (!this.cachedBricks[index]) {
+        this.cachedBricks[index] = { top, height, left };
+      }
       renderedBricks.push(brickRenderer(props));
     }
-
-    // let startIndex = 0;
-    // let cachedPosition = [];
-    // for (let i = startIndex; i < this.cachedBricks.length; i++) {
-    //   const cBrick = this.cachedBricks[i];
-    //   if (cBrick.top + cBrick.height >= this.scrollTop - virtualBuffer) {
-    //     cachedPosition.push(cBrick);
-    //   }
-    //   if (cachedPosition.length === columns) {
-    //     startIndex = i;
-    //     break;
-    //   }
-    // }
-    // this.positionArray = cachedPosition;
-
-    // if (this.positionArray.length === 0) {
-    //   this.positionArray = map(new Array(columns).fill(0), (value, index) => ({
-    //     left: index * columnWidth + verticalMargins,
-    //     top: 0
-    //   }));
-    // }
-
-    // const renderedBricks = [];
-
-    // for (let index = startIndex; index < bricks.length; index++) {
-    //   const brick = bricks[index];
-    //   const { top, left } = this.positionArray[0];
-    //   const height = getBrickHeight(index);
-    //   const style = {
-    //     top,
-    //     left,
-    //     height,
-    //     width: columnWidth,
-    //     position: "absolute"
-    //   };
-
-    //   this.addToPositionArray({ top: height + top, left }, this.positionArray);
-    //   this.positionArray.shift();
-
-    //   if (every(this.positionArray, pos => pos.top > this.getVirtualBottom())) {
-    //     this.minBottom = this.positionArray[0].top;
-    //     return renderedBricks;
-    //   }
-    //   const props = { style, index, item: brick };
-    //   if (!this.cachedBricks[index]) {
-    //     this.cachedBricks[index] = { top, height, left };
-    //   }
-    //   renderedBricks.push(brickRenderer(props));
-    // }
-    // return renderedBricks;
+    return renderedBricks;
   }
 
   render() {
