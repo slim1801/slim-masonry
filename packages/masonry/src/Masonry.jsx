@@ -12,6 +12,7 @@ export default class Masonry extends Component {
     getBrickHeight: PropTypes.func,
     brickRenderer: PropTypes.func,
     bricks: PropTypes.array,
+    margin: PropTypes.number,
     virtualBuffer: PropTypes.number,
     virtualTrigger: PropTypes.number
   };
@@ -21,7 +22,8 @@ export default class Masonry extends Component {
     height: "100%",
     columnWidth: 200,
     virtualBuffer: 500,
-    virtualTrigger: 200
+    virtualTrigger: 200,
+    margin: 0
   };
 
   masonryRef;
@@ -44,7 +46,15 @@ export default class Masonry extends Component {
     this.height = this.masonryRef.offsetHeight;
     window.addEventListener("resize", this.onResize.bind(this));
     this.masonryRef.addEventListener("scroll", this.onScroll.bind(this));
+    this.cacheBricks();
     this.forceUpdate();
+  }
+
+  cacheBricks() {
+    const { children } = this.masonryRef;
+    forEach(children, ({ offsetHeight }) => {
+      this.cachedBricks.push({ offsetHeight });
+    });
   }
 
   componentWillUnmount() {
@@ -91,43 +101,67 @@ export default class Masonry extends Component {
     return this.scrollTop + this.height + this.props.virtualBuffer;
   }
 
-  computeLayout() {
-    if (!this.masonryRef) {
-      return [];
-    }
+  componentDidUpdate() {
+    console.log(this.cachedBricks);
+  }
 
-    const { offsetWidth, offsetHeight } = this.masonryRef;
+  componentDidUpdate() {
+    console.log("COMP DID UPDATE");
+  }
+
+  computeLayout() {
     const {
       bricks,
       brickRenderer,
       columnWidth,
+      margin,
       getBrickHeight,
       virtualBuffer
     } = this.props;
+
+    if (!this.masonryRef) {
+      return map(bricks, (brick, index) => {
+        const args = { style: { width: columnWidth }, index, item: brick };
+        return brickRenderer(args);
+      });
+    }
+
+    const { offsetWidth, offsetHeight } = this.masonryRef;
 
     const columns = Math.floor(offsetWidth / columnWidth);
     const verticalMargins = (offsetWidth % columnWidth) * 0.5;
 
     this.positionArray = map(new Array(columns).fill(0), (value, index) => ({
       left: index * columnWidth + verticalMargins,
-      top: 0
+      top: 0,
+      column: index
     }));
 
     const renderedBricks = [];
 
     for (let index = 0; index < bricks.length; index++) {
       const brick = bricks[index];
-      const { top, left } = this.positionArray[0];
-      const height = getBrickHeight(index);
+      const { top, left, column } = this.positionArray[0];
+
+      let height;
+      if (getBrickHeight) {
+        height = getBrickHeight(index);
+      } else if (this.cachedBricks[index]) {
+        height = this.cachedBricks[index].offsetHeight;
+      }
       const style = {
         top,
-        left,
+        left: left + margin * column,
         height,
         width: columnWidth,
-        position: "absolute"
+        position: "absolute",
+        boxSizing: "border-box"
       };
 
-      this.addToPositionArray({ top: height + top, left }, this.positionArray);
+      this.addToPositionArray(
+        { top: height + top + margin, left, column },
+        this.positionArray
+      );
       this.positionArray.shift();
 
       if (height + top <= this.scrollTop - virtualBuffer) {
@@ -135,23 +169,21 @@ export default class Masonry extends Component {
       } else if (renderedBricks.length === 0) {
         this.minTop = top;
       }
+      if (!this.cachedBricks[index]) {
+        this.cachedBricks[index] = { top, height, left };
+      }
+      renderedBricks.push(brickRenderer({ style, index, item: brick }));
 
       if (every(this.positionArray, pos => pos.top > this.getVirtualBottom())) {
         this.minBottom = this.positionArray[0].top;
         return renderedBricks;
       }
-      const props = { style, index, item: brick };
-      if (!this.cachedBricks[index]) {
-        this.cachedBricks[index] = { top, height, left };
-      }
-      renderedBricks.push(brickRenderer(props));
     }
     return renderedBricks;
   }
 
   render() {
     const { height, width } = this.props;
-    console.log("RENDER");
     return (
       <div
         ref={instance => {
